@@ -17,7 +17,6 @@ _addon.commands = {'mp3', 'music'}
 require('tables')
 require('strings')
 require('logger')
-local packets = require('packets')
 local config = require('config')
 local res = require('resources')
 
@@ -53,6 +52,9 @@ local MUSIC_TYPES = {
 local music_list = {}
 local music_by_name = {}
 
+-- Forward declare for proper ordering
+local init_fallback_music
+
 -- Initialize music list from resources
 local function init_music_list()
     music_list = {}
@@ -79,7 +81,7 @@ local function init_music_list()
 end
 
 -- Fallback music list if resources don't have bgm
-local function init_fallback_music()
+init_fallback_music = function()
     local fallback = {
         [0] = "Silence",
         [1] = "Vana'diel March",
@@ -212,9 +214,10 @@ local function set_music(song_id, music_type)
         return false
     end
 
-    -- Inject music change using the music packet
-    -- Music is set via @setmusic internal command or direct packet
-    windower.send_command('setmusic ' .. music_type .. ' ' .. song_id)
+    -- Inject music change packet (incoming packet 0x05F)
+    -- Packet format: 'IHH' = unsigned int header, unsigned short music_type, unsigned short song_id
+    -- 0x45F is the packet header (includes packet ID 0x05F with length bits)
+    windower.packets.inject_incoming(0x05F, ('IHH'):pack(0x45F, music_type, song_id))
 
     settings.last_played = song_id
     config.save(settings)
